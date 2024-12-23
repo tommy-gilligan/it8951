@@ -182,8 +182,12 @@ where
 
     fn read_multi_data(&mut self, buf: &mut [u16]) -> Result<(), Error> {
         self.wait_while_busy()?;
-        // create a u8 buffer
-        let mut read_buf = vec![0u8; buf.len()*2 /* nbr of data bytes */ + 2 /*dummby bytes */ + 2 /* read preamble */];
+        let mut read_buf = [0; 80];
+
+        // let mut read_buf = [
+        //     0u8;
+        //     (buf.len() + 2) * 2
+        // ];
 
         // 0x1000 prefix for read data
         read_buf[0] = 0x10;

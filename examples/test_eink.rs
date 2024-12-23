@@ -62,7 +62,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         epd.bounding_box().center() + Point::new(0, 15),
         embedded_graphics::mono_font::MonoTextStyle::new(
             &embedded_graphics::mono_font::iso_8859_1::FONT_9X18_BOLD,
-            Gray4::new(11),
+            Gray4::new(255),
         ),
         embedded_graphics::text::Alignment::Center,
     )

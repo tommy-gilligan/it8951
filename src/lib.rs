@@ -1,27 +1,24 @@
-#![cfg_attr(not(test), no_std)]
+#![no_std]
+// #![cfg_attr(not(test), no_std)]
 #![warn(missing_docs)]
 
 //! IT8951 epaper driver for the waveshare 7.8in display
 //! The implementation is based on the IT8951 I80/SPI/I2C programming guide
 //! provided by waveshare: https://www.waveshare.com/wiki/7.8inch_e-Paper_HAT
 
-#[macro_use]
-extern crate alloc;
 use core::marker::PhantomData;
 
-use alloc::string::String;
-
-mod area_serializer;
+// mod area_serializer;
 mod command;
 pub mod interface;
 pub mod memory_converter_settings;
-mod pixel_serializer;
+// mod pixel_serializer;
 mod register;
 mod serialization_helper;
 
-use area_serializer::{AreaSerializer, AreaSerializerIterator};
+// use area_serializer::{AreaSerializer, AreaSerializerIterator};
 use memory_converter_settings::MemoryConverterSetting;
-use pixel_serializer::{convert_color_to_pixel_iterator, PixelSerializer};
+// use pixel_serializer::{convert_color_to_pixel_iterator, PixelSerializer};
 
 /// Controller Error
 #[derive(Debug, PartialEq, Eq)]
@@ -70,12 +67,6 @@ pub struct DevInfo {
     pub panel_height: u16,
     /// start address of the frame buffer in the controller ram
     pub memory_address: u32,
-    /// Controller firmware version
-    pub firmware_version: String,
-    /// LUT version
-    /// The lut describes the waveforms to modify the display content
-    /// LUT is specific for every display
-    pub lut_version: String,
 }
 
 /// Describes a area on the display
@@ -277,29 +268,29 @@ impl<IT8951Interface: interface::IT8951Interface> IT8951<IT8951Interface, Run> {
     // buffer functions -------------------------------------------------------------------------------------------------
 
     /// Reads the given memory address from the controller ram into data
-    pub fn memory_burst_read(
-        &mut self,
-        memory_address: u32,
-        data: &mut [u16],
-    ) -> Result<(), Error> {
-        let args = [
-            memory_address as u16,
-            (memory_address >> 16) as u16,
-            data.len() as u16,
-            (data.len() >> 16) as u16,
-        ];
-        self.interface
-            .write_command_with_args(command::IT8951_TCON_MEM_BST_RD_T, &args)?;
-        self.interface
-            .write_command(command::IT8951_TCON_MEM_BST_RD_S)?;
+    // pub fn memory_burst_read(
+    //     &mut self,
+    //     memory_address: u32,
+    //     data: &mut [u16],
+    // ) -> Result<(), Error> {
+    //     let args = [
+    //         memory_address as u16,
+    //         (memory_address >> 16) as u16,
+    //         data.len() as u16,
+    //         (data.len() >> 16) as u16,
+    //     ];
+    //     self.interface
+    //         .write_command_with_args(command::IT8951_TCON_MEM_BST_RD_T, &args)?;
+    //     self.interface
+    //         .write_command(command::IT8951_TCON_MEM_BST_RD_S)?;
 
-        self.interface.read_multi_data(data)?;
+    //     self.interface.read_multi_data(data)?;
 
-        self.interface
-            .write_command(command::IT8951_TCON_MEM_BST_END)?;
+    //     self.interface
+    //         .write_command(command::IT8951_TCON_MEM_BST_END)?;
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     /// Writes a buffer of u16 values to the given memory address in the controller ram
     /// Buffer needs to be aligned to u16!
@@ -441,23 +432,9 @@ impl<IT8951Interface: interface::IT8951Interface> IT8951<IT8951Interface, Run> {
             panel_width: buf[0],
             panel_height: buf[1],
             memory_address: ((buf[3] as u32) << 16) | (buf[2] as u32),
-            firmware_version: self.buf_to_string(&buf[4..12]),
-            lut_version: self.buf_to_string(&buf[12..20]),
+            // firmware_version: self.buf_to_string(&buf[4..12]),
+            // lut_version: self.buf_to_string(&buf[12..20]),
         })
-    }
-
-    fn buf_to_string(&self, buf: &[u16]) -> String {
-        buf.iter()
-            .filter(|&&raw| raw != 0x0000)
-            .fold(String::new(), |mut res, &raw| {
-                if let Some(c) = char::from_u32((raw & 0xFF) as u32) {
-                    res.push(c);
-                }
-                if let Some(c) = char::from_u32((raw >> 8) as u32) {
-                    res.push(c);
-                }
-                res
-            })
     }
 
     fn get_vcom(&mut self) -> Result<u16, Error> {
@@ -515,64 +492,65 @@ impl<IT8951Interface: interface::IT8951Interface> DrawTarget for IT8951<IT8951In
     fn clear(&mut self, color: Self::Color) -> Result<(), Self::Error> {
         let info = self.get_dev_info();
 
-        self.fill_solid(
-            &Rectangle::new(
-                Point::zero(),
-                Size {
-                    width: info.panel_width as u32,
-                    height: info.panel_height as u32,
-                },
-            ),
-            color,
-        )
-    }
-
-    fn fill_solid(&mut self, area: &Rectangle, color: Self::Color) -> Result<(), Self::Error> {
-        // only update visible content
-        let area = area.intersection(&self.bounding_box());
-        // if the area is zero sized, skip drawing
-        if area.is_zero_sized() {
-            return Ok(());
-        }
-
-        let a = AreaSerializer::new(area, color, self.config.max_buffer_size);
-        let area_iter = AreaSerializerIterator::new(&a);
-
-        for (area_img_info, buffer) in area_iter {
-            let dev_info = self.get_dev_info();
-            self.load_image_area(
-                dev_info.memory_address,
-                MemoryConverterSetting::default(),
-                &area_img_info,
-                buffer,
-            )?;
-        }
+        // self.fill_solid(
+        //     &Rectangle::new(
+        //         Point::zero(),
+        //         Size {
+        //             width: info.panel_width as u32,
+        //             height: info.panel_height as u32,
+        //         },
+        //     ),
+        //     color,
+        // )
         Ok(())
     }
 
-    fn fill_contiguous<I>(&mut self, area: &Rectangle, colors: I) -> Result<(), Self::Error>
-    where
-        I: IntoIterator<Item = Self::Color>,
-    {
-        let iter = convert_color_to_pixel_iterator(*area, self.bounding_box(), colors.into_iter());
+    // fn fill_solid(&mut self, area: &Rectangle, color: Self::Color) -> Result<(), Self::Error> {
+    //     // only update visible content
+    //     let area = area.intersection(&self.bounding_box());
+    //     // if the area is zero sized, skip drawing
+    //     if area.is_zero_sized() {
+    //         return Ok(());
+    //     }
 
-        let pixel = PixelSerializer::new(
-            area.intersection(&self.bounding_box()),
-            iter,
-            self.config.max_buffer_size,
-        );
+    //     let a = AreaSerializer::new(area, color, self.config.max_buffer_size);
+    //     let area_iter = AreaSerializerIterator::new(&a);
 
-        for (area_img_info, buffer) in pixel {
-            let dev_info = self.get_dev_info();
-            self.load_image_area(
-                dev_info.memory_address,
-                MemoryConverterSetting::default(),
-                &area_img_info,
-                &buffer,
-            )?;
-        }
-        Ok(())
-    }
+    //     for (area_img_info, buffer) in area_iter {
+    //         let dev_info = self.get_dev_info();
+    //         self.load_image_area(
+    //             dev_info.memory_address,
+    //             MemoryConverterSetting::default(),
+    //             &area_img_info,
+    //             buffer,
+    //         )?;
+    //     }
+    //     Ok(())
+    // }
+
+    // fn fill_contiguous<I>(&mut self, area: &Rectangle, colors: I) -> Result<(), Self::Error>
+    // where
+    //     I: IntoIterator<Item = Self::Color>,
+    // {
+    //     let iter = convert_color_to_pixel_iterator(*area, self.bounding_box(), colors.into_iter());
+
+    //     let pixel = PixelSerializer::new(
+    //         area.intersection(&self.bounding_box()),
+    //         iter,
+    //         self.config.max_buffer_size,
+    //     );
+
+    //     for (area_img_info, buffer) in pixel {
+    //         let dev_info = self.get_dev_info();
+    //         self.load_image_area(
+    //             dev_info.memory_address,
+    //             MemoryConverterSetting::default(),
+    //             &area_img_info,
+    //             &buffer,
+    //         )?;
+    //     }
+    //     Ok(())
+    // }
 
     fn draw_iter<I>(&mut self, pixels: I) -> Result<(), Self::Error>
     where
