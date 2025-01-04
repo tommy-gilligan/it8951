@@ -3,11 +3,20 @@ use linux_embedded_hal::gpio_cdev::{Chip, LineRequestFlags};
 use linux_embedded_hal::spidev::{SpiModeFlags, SpidevOptions};
 use linux_embedded_hal::{CdevPin, Delay, SpidevDevice};
 use std::error::Error;
+use embedded_graphics::text::renderer::TextRenderer;
+use std::io;
+use std::io::Read;
+use std::cell::RefCell;
 
 use embedded_graphics::{
     pixelcolor::Gray4,
     prelude::*,
     primitives::{PrimitiveStyle, Rectangle},
+};
+use u8g2_fonts::{
+    fonts,
+    types::{FontColor, HorizontalAlignment, VerticalPosition},
+    FontRenderer,
 };
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -44,34 +53,73 @@ fn main() -> Result<(), Box<dyn Error>> {
         epd.get_dev_info()
     );
 
-    // Draw a filled square
-    Rectangle::new(Point::new(50, 350), Size::new(20, 20))
-        .into_styled(PrimitiveStyle::with_fill(Gray4::BLACK))
-        .draw(&mut epd)
-        .unwrap();
+    // Rectangle::new(Point::new(0, 0), Size::new(1872, 1404))
+    //     .into_styled(PrimitiveStyle::with_fill(Gray4::new(255)))
+    //     .draw(&mut epd)
+    //     .unwrap();
 
-    Rectangle::new(Point::new(0, 1000), Size::new(200, 200))
-        .into_styled(PrimitiveStyle::with_fill(Gray4::new(8)))
-        .draw(&mut epd)
-        .unwrap();
 
-    // Draw centered text.
-    let text = "IT8951 Driver Example";
-    embedded_graphics::text::Text::with_alignment(
-        text,
-        epd.bounding_box().center() + Point::new(0, 15),
-        embedded_graphics::mono_font::MonoTextStyle::new(
-            &embedded_graphics::mono_font::iso_8859_1::FONT_9X18_BOLD,
-            Gray4::new(255),
-        ),
-        embedded_graphics::text::Alignment::Center,
-    )
-    .draw(&mut epd)
-    .unwrap();
+    let text_style = embedded_graphics::mono_font::MonoTextStyle::new(
+        &embedded_graphics::mono_font::iso_8859_1::FONT_9X18_BOLD,
+        Gray4::new(0),
+    );
 
-    epd.display(it8951::WaveformMode::GL16).unwrap();
+    let mut position = text_style.draw_string(
+        "ready",
+        Point::new(0, 16),
+        embedded_graphics::text::Baseline::Bottom,
+        &mut UpScale(&mut epd)
+    ).unwrap();
+
+    loop {
+        for b in "all work and no play makes jack dull boy\n".bytes() {
+            let mut us = UpScale(&mut epd);
+
+            if b.clone() == 10 {
+                position = Point::new(0, position.y + 16);
+                continue;
+            }
+
+            position = text_style.draw_string(
+                &format!("{}", char::from(b)),
+                position,
+                embedded_graphics::text::Baseline::Bottom,
+                &mut us
+            ).unwrap();
+            epd.display(it8951::WaveformMode::A2).unwrap();
+        }
+    }
 
     epd.sleep().unwrap();
 
     Ok(())
+}
+
+struct UpScale<'a, T>(&'a mut T) where T: DrawTarget;
+
+impl <'a, T>Dimensions for UpScale<'a, T> where T: DrawTarget {
+    fn bounding_box(&self) -> Rectangle {
+        Rectangle {
+            top_left: self.0.bounding_box().top_left,
+            size:  embedded_graphics_core::geometry::Size {
+                height: self.0.bounding_box().size.height >> 2,
+                width: self.0.bounding_box().size.width >> 2,
+            }
+        }
+    }
+}
+
+impl <'a, T>DrawTarget for UpScale<'a, T> where T: DrawTarget {
+    type Color = T::Color;
+    type Error = T::Error;
+
+    fn draw_iter<I>(&mut self, pixels: I) -> Result<(), Self::Error> where I: IntoIterator<Item = Pixel<Self::Color>> {
+        for Pixel(point, color) in pixels {
+            self.0.fill_solid(
+                &Rectangle::new(Point::new(point.x << 2, point.y << 2), Size::new(4, 4)),
+                color
+            )?
+        }
+        Ok(())
+    }
 }
